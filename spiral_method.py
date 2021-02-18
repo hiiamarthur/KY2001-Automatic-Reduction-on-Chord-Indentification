@@ -3,8 +3,10 @@ import numpy as np
 import math
 import matplotlib
 
-major_key_ratio = [0.6025,0.2930,0.1145]
+major_key_ratio = [0.6025,0.2930,0.1045]
 minor_key_ratio = [0.6011,0.2121,0.1868]
+# minor_key_ratio = [0.5247,0.1627,0.3126]
+key_ratio = [0.516,0.315,0.169]
 # major_key_ratio = minor_key_ratio = [0.5353,0.2743,0.1904]
 spiral_radius = 1
 spiral_height = math.sqrt(2/15)
@@ -110,8 +112,8 @@ def run_find_segment(notes_bef,duration_bef,notes_aft,duration_aft):
     return np.linalg.norm(np.array(coe_bef) - np.array(coe_aft))
 
 
-def run_find_tonal_center(notes,duration):
-    print(notes)
+def run_find_tonal_center(notes,duration,symbol):
+    # print(notes)
     pitch_list = []
     duration_list = []
     spiral_arr_list = []
@@ -122,7 +124,7 @@ def run_find_tonal_center(notes,duration):
                 spiral_arr_list.append(SpiralArray(index,"M",j))
 
     test2 = [1 / 4, 1 / 4, 1 / 8, 1 / 4]
-    print(duration)
+    # print(duration)
     # spiral_arr_list = [SpiralArray(2,"M",'D'),SpiralArray(6,"M",'F#'),SpiralArray(3,"M",'A')] // for testing only
     # print(np.append(np.append(test[1].pitch, test[0].pitch, axis=1), test[2].pitch, axis=1))
     # print(np.sum(np.append(np.append(test[1].pitch, test[0].pitch, axis=1), test[2].pitch, axis=1), axis=1))
@@ -142,9 +144,9 @@ def run_find_tonal_center(notes,duration):
             minor_diff = np.array(coe) - np.array(i['minor_spiral_array'].key)
             major_diff = np.array(coe) - np.array(i['major_spiral_array'].key)
             major_score.append(np.linalg.norm(major_diff))
-            major_key.append(i['note']+"major")
+            major_key.append(i['note']+"-major")
             minor_score.append(np.linalg.norm(minor_diff))
-            minor_key.append(i['note']+"minor")
+            minor_key.append(i['note']+"-minor")
         only_major = False
         # some grouping and calculation to rank the result
         if not only_major:
@@ -170,7 +172,7 @@ def run_find_tonal_center(notes,duration):
                 endoflist = True
         # print(major_score)
         # print(sorted_key)
-    print("after full run on run(),the rank of key are listed as followed:")
+    # print("after full run on run(),the rank of key are listed as followed:")
     for index2,result in enumerate(sorted_key):
         # print(result)
         if counter > 4:
@@ -185,8 +187,38 @@ def run_find_tonal_center(notes,duration):
         #     else:
         #         print(result," with similarity score:",old_score)
         # old_score = major_score[index2]
-        print(result," with similarity score:",major_score[index2])
+
+        # print([x.pitchedCommonName[:len(x.pitchedCommonName)-6] for x in symbol])
+        # print(result," with similarity score:",major_score[index2])
         counter += 1
+    temp_symbol, num = count_note_num(symbol)
+    non_duplicate_symbol = [x.pitchedCommonName[:len(x.pitchedCommonName)-6] for x in temp_symbol]
+    # if len(non_duplicate_symbol) == 1:
+    # if non_duplicate_symbol[0] in sorted_key[:2]:
+    # print(type(sorted_key[:len(non_duplicate_symbol)+1]),type(non_duplicate_symbol))
+    # print(sorted_key[:len(non_duplicate_symbol)+1])
+    # print(non_duplicate_symbol)
+    if all(x in sorted_key[:len(non_duplicate_symbol)+1] for x in non_duplicate_symbol):
+
+        return True
+    else:
+
+        return False
+
+
+def count_note_num(note_list):
+    previous = ""
+    arr = []
+    num = [0]
+
+    for i in note_list:
+        if i != previous:
+            previous = i
+            arr.append(i)
+            num.append(1)
+        else:
+            num[-1] += 1
+    return arr,num
 
 
 def  analysis_boundaries(notes,duration):

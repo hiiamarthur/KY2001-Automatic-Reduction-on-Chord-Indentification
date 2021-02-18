@@ -3,17 +3,22 @@ from spiral_method import *
 import matplotlib.pyplot as plt
 import time
 import scipy.signal as signal
+import os
+# from collections import defaultdict
+import collections
 structure_arr = list()
 rate = float
 show_bound_r = int
 show_bound_l = int
+by_mean = bool
 
 def initialize():
     global structure_arr
     structure_arr = initialize_spiral_structure()
 
 def find_tonality_by_bar(s):
-    segment = []
+    segments = []
+    segments_symbol = []
     beat = 0
     bar = []
     piece = []
@@ -37,19 +42,16 @@ def find_tonality_by_bar(s):
     #
     #         # print(bar, "yo")
     #     beat = i.beat
-
-    print(s,get_bar_num(s))
+    previous_symbol = [""]
+    # print("get bar num:",get_bar_num(s))
     for i in range(0,get_bar_num(s)):
-        measure = s.measure(i)
-        temp = []
-        if len(measure.parts[0].pitches) == 0:
-            continue
-        print("haha , bar ",i ,"  ",list(measure.parts[0].flat.notes),list(measure.parts[1].flat.notes))
-        for j in measure.parts[0].flat.notes:
-            temp.append(j)
-        for k in measure.parts[1].flat.notes:
-            temp.append(k)
-        segment.append(temp)
+        symbol,notes = get_note_in_bar(s,i)
+        segments.append(notes)
+        if len(symbol) == 0:
+            symbol = [previous_symbol[-1]]
+        else:
+            previous_symbol = symbol
+        segments_symbol.append(symbol)
         # print("\n\nhaha upper part",measure.parts[0].pitches,"\n\n lower part",measure.parts[1].pitches,"\n\nbar :",i, " segment:",segment[i])
 
 
@@ -63,22 +65,30 @@ def find_tonality_by_bar(s):
     #     print(j)
     counter = 0
     total_note = 0
-    for index,i in enumerate(segment):
-
+    true_case = 0
+    for index,i in enumerate(segments):
+        if len(i) == 0:
+            continue
         notes,duration = get_segment_info(i)
-        print("In segment ",index,":")
-        run_find_tonal_center(notes,duration)
+        # print("In segment ",index,":")
+        # print("Chord marked:",segments_symbol[index])
+        flag = run_find_tonal_center(notes,duration,segments_symbol[index])
+        if flag:
+            true_case += 1
         notes = []
         duration = []
         counter += 1
         # if counter > 18:
         #     break
 
-        analysis(segment[index])
-        total_note += len(segment)
+        # analysis(i)
+        total_note += len(i)
 
     print("total note is:",total_note)
-    print(counter2)
+    print("total bar:",counter)
+    print("bar with right prediction of segmentation",true_case)
+    print("average correct %:",float(true_case)/counter)
+    print("")
     return
 
 def get_segment_info(value):
@@ -106,23 +116,86 @@ def get_segment_info(value):
         # duration.append()
     return notes,duration
 
+def get_note_in_bar(s,i):
+    measure = s.measure(i)
+    notes = []
+    symbol = []
+    if len(measure.parts[0].pitches) == 0:
+        return symbol,notes
+    # print("haha , bar ", i, "  ", list(measure.parts[0].flat.notes), list(measure.parts[1].flat.notes))
+    for j in measure.parts[0].flat.notes:
+        if isinstance(j, note.Rest):
+            continue
+        if isinstance(j, harmony.NoChord):
+            continue
+        if isinstance(j,harmony.ChordSymbol):
+            symbol.append(j)
+            continue
+        notes.append(j)
+    for k in measure.parts[1].flat.notes:
+        if isinstance(k, note.Rest):
+            continue
+        if isinstance(k, harmony.NoChord):
+            continue
+        if isinstance(k,harmony.ChordSymbol):
+            symbol.append(k)
+            continue
+        notes.append(k)
+    return symbol,notes
+
 def get_bar_num(s):
     count = 0
     have_exist_condition = 0
     while True:
         measure = s.measure(count)
-        # print(measure.parts[0].pitches)
-        if len(measure.parts[0].pitches) == 0 and have_exist_condition:
+        if len(measure.parts[0].pitches) == 0 and len(measure.parts[1].pitches) == 0 and have_exist_condition:
             break
         else:
             have_exist_condition = 1
         count += 1
     return count
 
+
+
+def is_notes_equal(notes1,notes2):
+    # print("called",notes1,notes2)
+    if len(notes1) != len(notes2):
+        return False
+    list_dict_notes1 = collections.defaultdict(list)
+    list_dict_notes2 = collections.defaultdict(list)
+    for note1 in notes1:
+        list_dict_notes1[type(note1)].append(note1)
+    for note2 in notes2:
+        list_dict_notes2[type(note2)].append(note2)
+    # print("a")
+    # print("\n list1",list_dict_notes1[note.Note],"\n list2:",list_dict_notes2[note.Note])
+    # print("here")
+    if sorted(list_dict_notes1[note.Note]) == sorted(list_dict_notes2[note.Note]):
+        # print("b")
+        t = list(list_dict_notes1[chord.Chord])
+        s = list(list_dict_notes2[chord.Chord])
+        if len(t) == len(s) == 0:
+            # print("c")
+            return True
+        try:
+            # print("d")
+            for elem in s:
+                t.remove(elem)
+        except ValueError:
+            return False
+        # print("e")
+        return True
+    else:
+        return False
+
+
+
+
 def segment_analysis(s):
     slur_list = []
     dot_list = []
     unit_time = 1
+
     note_list = [p for p in s.flat.notesAndRests]
     # while True:
     #     if type()
@@ -147,6 +220,39 @@ def segment_analysis(s):
 
     is_sluring = False
     have_set_bar_index = True
+    symbol,bar_note = get_note_in_bar(s,bar_count)
+    # bar_note.sort()
+    increment_bar_note_list = []
+    increment_duration = 0
+    increment_duration_list = []
+    for counter,i in enumerate(note_list):
+        increment_duration_list.append(increment_duration + i.beat)
+        if isinstance(i,harmony.ChordSymbol):
+            continue
+        if isinstance(i, note.Rest):
+            continue
+        if isinstance(i, harmony.NoChord):
+            continue
+        if len(bar_note) == 0:
+            bar_count += 1
+            symbol,bar_note = get_note_in_bar(s,bar_count)
+
+            # bar_note.sort()
+        increment_bar_note_list.append(i)
+        # increment_bar_note_list.sort()
+
+        if is_notes_equal(bar_note,increment_bar_note_list):
+
+            print(s.getTimeSignatures())
+            print(s.timeSignature,s.measure(bar_count).duration.quarterLength,s.measure(bar_count).beatDuration,s.measure(bar_count).beat)
+            increment_duration += s.measure(bar_count).duration.quarterLength
+            print("\n bar note num:",bar_count,"with note:", bar_note, "\n increment:", increment_bar_note_list)
+            bar_count += 1
+            increment_bar_note_list = []
+            symbol,bar_note = get_note_in_bar(s,bar_count)
+
+
+
     for counter,i in enumerate(note_list):
         b = i.getSpannerSites()
 
@@ -171,26 +277,46 @@ def segment_analysis(s):
         unit_time += 1
         if isinstance(i,harmony.ChordSymbol):
             continue
-        if i.beat >= beat:
-            bar.append(i)
-        elif beat > i.beat:
-            # print(beat,i.beat)
-            bar_count += 1
-            bar_index.append(bar_count)
-            have_set_bar_index = False
-            print("Bar above:",bar_count)
-            bar.clear()
-            bar.append(i)
-        if have_set_bar_index:
-            bar_index.append(0)
-        have_set_bar_index = True
-        beat = i.beat
-        if isinstance(i,note.Rest):
+        if isinstance(i, note.Rest):
             continue
-        if isinstance(i,harmony.ChordSymbol):
+        if isinstance(i, harmony.NoChord):
             continue
-        if isinstance(i,harmony.NoChord):
-            continue
+        # if len(bar_note) == 0:
+        #     bar_count += 1
+        #     bar_note = get_note_in_bar(s,bar_count)
+        #
+        #     # bar_note.sort()
+        # increment_bar_note_list.append(i)
+        # # increment_bar_note_list.sort()
+        #
+        # if is_notes_equal(bar_note,increment_bar_note_list):
+        #
+        #     print(s.getTimeSignatures())
+        #     print(s.timeSignature,s.measure(bar_count).duration.quarterLength,s.measure(bar_count).beatDuration,s.measure(bar_count).beat)
+        #     increment_duration += s.measure(bar_count).duration.quarterLength
+        #     print("\n bar note num:",bar_count,"with note:", bar_note, "\n increment:", increment_bar_note_list)
+        #     bar_count += 1
+        #     increment_bar_note_list = []
+        #     bar_note = get_note_in_bar(s,bar_count)
+
+
+
+        # if bar_note
+        # if i.beat >= beat:
+        #     bar.append(i)
+        # elif beat > i.beat:
+        #     # print(beat,i.beat)
+        #     bar_count += 1
+        #     bar_index.append(bar_count)
+        #     have_set_bar_index = False
+        #     print("Bar above:",bar_count)
+        #     bar.clear()
+        #     bar.append(i)
+        # if have_set_bar_index:
+        #     bar_index.append(0)
+        # have_set_bar_index = True
+        # beat = i.beat
+
 
         # note_list_no_symbol.append(i)
         bar_info_of_note.append(bar_count)
@@ -202,17 +328,20 @@ def segment_analysis(s):
             # print(notes_after_bound)
             if any(isinstance(x, note.Note) or isinstance(x, chord.Chord) for x in notes_before_bound):
                 if any(isinstance(x, note.Note) or isinstance(x, chord.Chord) for x in notes_after_bound):
-                    notes_before,duration_before = get_segment_info(notes_before_bound)
-                    notes_after,duration_after = get_segment_info(notes_after_bound)
-                    coe_diff.append(run_find_segment(notes_before,duration_before,notes_after,duration_after))
-                    note_list_no_symbol.append(i)
-                    index.append(len(coe_diff))
+                    # if by_mean:
+                        notes_before,duration_before = get_segment_info(notes_before_bound)
+                        notes_after,duration_after = get_segment_info(notes_after_bound)
+                        coe_diff.append(run_find_segment(notes_before,duration_before,notes_after,duration_after))
+                        note_list_no_symbol.append(i)
+                        index.append(len(coe_diff))
+                    # else:
+
 
 
 
             # print(bar, "yo")
 
-        print("In index :", counter,"note_num:",len(note_list_no_symbol),"algo_run_though",len(coe_diff)+buffer, type(i), i.pitches, i.beat, list(i.pitches)[0].nameWithOctave,slur_list[counter])
+        print("In index :", counter,"note_num:",len(note_list_no_symbol),"algo_run_though",len(coe_diff)+buffer,"with total quater beat:", increment_duration_list[counter] , type(i), i.pitches, i.beat, list(i.pitches)[0].nameWithOctave,slur_list[counter])
 
 
 
@@ -229,7 +358,7 @@ def segment_analysis(s):
     maxima_note = []
     maxima_limit = []
 
-    a = np.array(coe_diff);
+    a = np.array(coe_diff)
     # maxima_list = np.r_[True, coe_diff[1:] > coe_diff[:-1]] & np.r_[coe_diff[:-1] > coe_diff[1:], True]
     maxima_index = signal.argrelextrema(np.array(coe_diff),np.greater)
     # maxima_index = maxima_index
@@ -313,13 +442,21 @@ def main():
     num = input('Input A for CEG,B for BA:')
     num2 = ""
     if num is 'A':
-        piecepath = "../musicPiece/Piano_Sonata_No._11.xml"
+        # piecepath = "../musicPiece/Polonaise_in_A_Major,_“Military_Polonaise”.xml"
+        # piecepath = "../musicPiece/Minuet_in_G_Major.xml"
+        # piecepath = "../musicPiece/Piano_Sonata_No._11.xml"
+        piecepath = "../musicPiece/Prélude_in_G_Major.xml"
+
     if num is 'B':
         piecepath = "../musicPiece/Piano_Sonata_No._11.xml"
+        piecepath = "../musicPiece/Prélude_in_G_Major.xml"
         # piecepath = "../musicPiece/Étude_in_C_Minor.mxl";
         num2 = input('Choose 1 for first layer,2 for second layer,3 for third layer:'
                      'Update: At first run: effective h = 1, window_length = 2*average_note_density')
-        global rate, show_bound_l, show_bound_r
+        num3 = input('length by mean or bar(M/B)')
+
+
+        global rate, show_bound_l, show_bound_r,by_mean
         if int(num2) == 1:
             rate = 2
             show_bound_l = 1
@@ -330,105 +467,24 @@ def main():
             show_bound_r = 220
         elif int(num2) == 3:
             rate = 1/2
-            show_bound_l = 160
-            show_bound_r = 185
+            show_bound_l = 1
+            show_bound_r = 220
+        if num3 is 'M':
+            by_mean = True
+        else:
+            by_mean = False
     try:
 
         s = getMusicPiece(piecepath)
-        # print(dir(s.spanners))
-        count = 0
-        for i in s.flat.notes:
-            count += 1
-            if count > 500:
-                break
-            # print(i,"xdd",i.articulations)
-
-
-        ryans = corpus.search('ryansMammoth')
-        mozart = corpus.search('mozart')
-        quartet = mozart.search('Quartet No.1 in G Major');
-
-        highland = ryans.search('Highland Regiment')
-        quartetparsed = quartet[0].parse();
-        highlandParsed = highland[0].parse()
-
-        # highlandParsed.show()
-        high_fragment = highlandParsed.measures(0,8)
-        s_fragment = s.measures(0,8)
-
-        highIterator = quartetparsed.recurse()
-        sIterator = s_fragment.recurse()
-
-        sslur = sIterator.spanners
-        highslur = highIterator.getElementsByClass('Slur')
-        higher = 0
-        lower = 0
-        same = 0
-        count = 0
-
-        for sl in sslur:
-            print(sl,len(sl),sl.beat)
-            count += 1
-            if count > 50:
-                break
-        count  = 0
-        print("hehehe")
-        # for sl in highslur:
-        #     print(sl,sl.beat,sl.getFirst(),sl.getLast())
-        #     # print(sl)
-        #     # if (count > 10):
-        #     #     break
-        #     count += 1
-            # firstNote = sl.getFirst()
-            # lastNote = sl.getLast()
-            # psDiff = lastNote.pitch.ps - firstNote.pitch.ps
-            # if psDiff > 0:
-            #     higher += 1
-            # elif psDiff < 0:
-            #     lower += 1
-            # else:
-            #     same += 1
-        # print(count)
-        # s.measure(0,8).show()
-
-
-        for i in s.spanners.notes:
-            print(i)
-        # for i in [p for p in s.flat.notesAndRests]:
-        #     print(i,i.beat)
-        #     if isinstance(i,note.Rest):
-        #         print('yo')
-        # print(dir(s.flat))
-        # for i in s.flat.spanners:
-        #     print(i)
-        # test = s.stripTies()
-        # j = 0
-        # for i in test:
-        #     if i.isStream:
-        #         e = repeat.Expander(i)
-        #         s2 = e.process()
-        #         timing = s2.secondsMap
-        #         test[j] = s2
-        #     j += 1
-        # print('pitch, duration_string, duration, tie, midi pitch, octave')
-        # for a in test.recurse().notes:
-        #
-        #     if (a.isNote):
-        #         x = a;
-        #         s = getMusicProperties(x);
-        #         print(s);
-        #
-        #     if (a.isChord):
-        #         for x in a._notes:
-        #             s = getMusicProperties(x);
-        #             print(s);
-
-        a = s.getSpannerSites()
-        print(a)
-        # s.measure(200).show()
-
         if num is 'A':
-            find_tonality_by_bar(s)
+            piece_path = "../musicPiece"
+            for root, dirs, files in os.walk(piece_path):
+                for filename in files:
+
+                    if filename.endswith('xml'):
+                        print(filename)
+                        sm = getMusicPiece(piece_path+'/'+filename)
+                        find_tonality_by_bar(sm)
         elif num is 'B':
             segment_analysis(s)
         else:
