@@ -1,6 +1,6 @@
 # Automatic Chord Identification and Reduction
 
-A computational musicology system for automatic chord identification, tonal center detection, and hierarchical segmentation analysis of musical scores using the Spiral Array Model.
+A Symbolic AI machine learning musicology system for automatic chord identification, tonal center detection, and hierarchical segmentation analysis of musical scores using the Spiral Array Model and KNN Algorithm.
 
 ## Overview
 
@@ -258,6 +258,7 @@ Potential enhancements:
 - Real-time audio analysis capabilities
 - Extended chord vocabulary (9th, 11th, 13th chords)
 - Improved handling of modulations and chromaticism
+- Model replaced with LLMs instead of Fixed Spiral Calculation (required large amount of piece as data)
 
 ## Contributing
 
